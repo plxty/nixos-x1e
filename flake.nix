@@ -1,6 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
   };
   outputs =
     {
@@ -33,25 +33,9 @@
     // eachDefaultSystem (
       buildSystem:
       let
-        pkgs-unpatched = nixpkgs.legacyPackages.${buildSystem};
+        pkgs = nixpkgs.legacyPackages.${buildSystem};
 
-        nixpkgs-patched =
-          (pkgs-unpatched.applyPatches {
-            name = "nixpkgs-patched";
-            src = nixpkgs;
-            patches = [
-              (pkgs-unpatched.fetchpatch {
-                # nixos/iso-image: add devicetree support
-                # https://github.com/NixOS/nixpkgs/pull/396334
-                url = "https://github.com/NixOS/nixpkgs/commit/de1fdb6310af8f70c98746ba4550dc2799a03621.patch";
-                hash = "sha256-brqJxblmqWFAk8JgxmxXeHoiaWiQtsCsOzht/WlH5eE=";
-              })
-              ./nixpkgs-efi-shell.patch
-            ];
-          }).overrideAttrs
-            { allowSubstitutes = true; };
-
-        pkgs-cross = import nixpkgs-patched {
+        pkgs-cross = import nixpkgs {
           overlays = [
             self.overlays.default
             (final: prev: {
@@ -73,10 +57,31 @@
           allowUnsupportedSystem = true;
         };
 
+        modules-patched = pkgs.applyPatches {
+          name = "modules-patched";
+          src = builtins.filterSource (
+            path: type:
+            let
+              inherit (nixpkgs) lib;
+              path' = (lib.removePrefix "${nixpkgs}/" (builtins.toString path)) + "/";
+            in
+            path' == "nixos/" || lib.hasPrefix "nixos/modules/" path' || lib.hasPrefix "nixos/lib/" path'
+          ) "${nixpkgs}"; # reduce copies
+          patches = [
+            (pkgs.fetchpatch {
+              # nixos/iso-image: add devicetree support
+              # https://github.com/NixOS/nixpkgs/pull/396334
+              url = "https://github.com/NixOS/nixpkgs/commit/de1fdb6310af8f70c98746ba4550dc2799a03621.patch";
+              hash = "sha256-brqJxblmqWFAk8JgxmxXeHoiaWiQtsCsOzht/WlH5eE=";
+            })
+            ./nixpkgs-efi-shell.patch
+          ];
+        };
+
         treefmtEval =
           let
             treefmt-nix = import (
-              pkgs-unpatched.fetchFromGitHub {
+              pkgs.fetchFromGitHub {
                 owner = "numtide";
                 repo = "treefmt-nix";
                 rev = "0ce9d149d99bc383d1f2d85f31f6ebd146e46085";
@@ -84,12 +89,12 @@
               }
             );
           in
-          (treefmt-nix.evalModule pkgs-unpatched {
+          (treefmt-nix.evalModule pkgs {
             programs.nixfmt.enable = true;
             settings.on-unmatched = "info";
             programs.mdformat = {
               enable = true;
-              package = pkgs-unpatched.mdformat.withPlugins (p: [ p.mdformat-gfm ]);
+              package = pkgs.mdformat.withPlugins (p: [ p.mdformat-gfm ]);
             };
           });
 
@@ -97,7 +102,9 @@
           device:
           nixpkgs.lib.nixosSystem {
             modules = [
-              "${nixpkgs-patched}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
+              { disabledModules = [ "installer/cd-dvd/iso-image.nix" ]; }
+              "${modules-patched}/nixos/modules/installer/cd-dvd/iso-image.nix"
+              "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
               ./iso.nix
               ./modules/x1e80100.nix
               ./modules/common.nix
@@ -109,7 +116,7 @@
                 { lib, pkgs, ... }:
                 lib.mkIf (pkgs.stdenv.buildPlatform != pkgs.stdenv.hostPlatform) {
                   # Required to evaluate packages from `pkgs-cross` on the device.
-                  isoImage.storeContents = [ nixpkgs-patched ];
+                  isoImage.storeContents = [ nixpkgs ];
 
                   system.systemBuilderCommands = ''
                     echo -n "${pkgs.stdenv.buildPlatform.system}" > $out/build-system
