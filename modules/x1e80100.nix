@@ -49,6 +49,7 @@ in
           "phy_qcom_eusb2_repeater"
           "tcsrcc_x1e80100"
 
+          "dm_mod" # nixos/modules/system/boot/kernel.nix
           "i2c_hid_of"
           "i2c_qcom_geni"
           "dispcc-x1e80100"
@@ -78,6 +79,13 @@ in
           "phy_nxp_ptn3222"
           "phy_qcom_qmp_usb"
         ])
+
+        (lib.mkIf cfg.asus-vivobook-s15.enable [
+          "panel_samsung_atna33xc20"
+          "phy_nxp_ptn3222"
+          "phy_qcom_qmp_usb"
+          "ath12k"
+        ])
       ];
 
       boot.kernelParams = lib.mkMerge [
@@ -99,6 +107,10 @@ in
       ];
 
       hardware.deviceTree.enable = true;
+
+      hardware.firmware = lib.mkMerge [
+        (lib.mkIf cfg.asus-vivobook-s15.enable [ pkgs.x1e80100-asus-vivobook-s15-firmware ])
+      ];
 
       # For now the kernel is same for all of the supported devices, hopefully
       # we can keep it this way so compile times stay manageable.

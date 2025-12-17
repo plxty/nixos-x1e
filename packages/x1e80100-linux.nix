@@ -3,7 +3,6 @@
   fetchFromGitLab,
   buildLinux,
   linuxPackagesFor,
-  fetchpatch,
   fetchurl,
   b4,
   ...
@@ -46,6 +45,23 @@ linuxPackagesFor (buildLinux {
       # in the kernel should not be needed.
       name = "rotation = <180>;";
       patch = ./lenovo-yoga-slim7x-camera-rotation.patch;
+    }
+
+    # vivobook-s15 dts patches:
+    # TODO: https://github.com/SpieringsAE/linux/commit/44dfe15604bfc6423753ebe53968a98f0e7cfbb5
+    {
+      name = "arm64: dts: qcom: x1e80100-vivobook-s15: enable ps8830 retimers";
+      patch = fetchurl {
+        url = "https://github.com/SpieringsAE/linux/commit/52196798eacc4337aaa02b79a90829297de2131c.patch";
+        sha256 = "1b5zfspy92n88z7d0vrfzxfxbnyhvyirrzmk6ldgz6sh1xxl1ndg";
+      };
+    }
+    {
+      name = "arm64: dts: qcom: vivobook-s15: Add charge limit nvmem";
+      patch = fetchurl {
+        url = "https://github.com/SpieringsAE/linux/commit/14365acfeddaa96031f95ce50a54e14f77b8f86a.patch";
+        sha256 = "098nn9h6wfagv0wcmmgxm09mpql8sa2nvld6yw0511mrb2083az2";
+      };
     }
   ];
 
